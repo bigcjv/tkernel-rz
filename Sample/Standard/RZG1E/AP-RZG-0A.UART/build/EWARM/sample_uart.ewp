@@ -2243,6 +2243,9 @@
     <group>
         <name>Application</name>
         <file>
+            <name>$PROJ_DIR$\..\..\src\sample.c</name>
+        </file>
+        <file>
             <name>$PROJ_DIR$\..\..\src\mmutbl_cfg.c</name>
         </file>
     </group>

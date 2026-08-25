@@ -1,208 +1,176 @@
-/**
- * @brief   Sample program
- * @date    2016.02.03
- * @author  Copyright (c) 2016, eForce Co.,Ltd.  All rights reserved.
- *
- ****************************************************************************
- * @par     History
- *          - rev 1.0 (2016.02.03) i-cho
- *            Initial version.
- ****************************************************************************
- */
+/* AP-RZG-0A micro T-Kernel CPU0 functional test. */
+#include <tk/tkernel.h>
+#include <tm/tmonitor.h>
 
-#include <string.h>
-#include "kernel.h"
-#include "kernel_id.h"
-#include "DDR_CortexA_GIC.h"
-#include "DDR_CortexA_GTIMER.h"
-#include "DDR_COM.h"
-#include "DDR_RZG1_SCIF.h"
-#include "DDR_RZG1_SCIF_cfg.h"
-#include "krn_cfg.h"
-#define CFG_G1E
-#include "RZG1_UC3.h"
+#define TEST_TASK_STACK_SIZE  2048
+#define TEST_PRODUCER_PERIOD  100
+#define TEST_REPORT_PERIOD    1000
 
-/**
- * Serial port configuration
- */
-T_COM_SMOD const uart_ini = {115200, BLEN8, PAR_NONE, SBIT1, FLW_NONE};
-VB const * const banner_str = "\n\r\teForce Operating System Sample Program V1.0\n\r\t\tSerial Port (SCIF 0)\r\n";
+#define GPIO6_OUTDTH          (RZG1E_GPIO6_BASE + 0x0044UL)
+#define GPIO6_OUTDTL          (RZG1E_GPIO6_BASE + 0x0048UL)
+#define LED1_MASK             (1UL << 24)
+#define LED2_MASK             (1UL << 25)
 
+LOCAL volatile UW produced_count;
+LOCAL volatile UW consumed_count;
+LOCAL volatile UW cyclic_count;
+LOCAL volatile W test_error;
+LOCAL ID test_semid;
 
-/**
- * Mail
- */
-typedef struct t_msgblk {
-    T_MSG   header;
-    UINT    cnt;
-    VB      buf[120];
-} T_MSGBLK;
-
-T_CMPF const cmpf = {TA_TFIFO, 20, sizeof(T_MSGBLK), 0, "Mpf"};
-T_CMBX const cmbx = {TA_TFIFO|TA_MFIFO, 0, 0, "Mbx"};
-
-/*******************************
-        Snd Task
- *******************************/
-void SndTask(VP_INT exinf)
+LOCAL void record_error(ER ercd)
 {
-    UINT txcnt;
-    T_MSGBLK *blk;
-    int i;
-    VB chr;
-    ER ercd;
-
-    ini_com(DID_UART0, &uart_ini);
-    ctr_com(DID_UART0, STA_COM, 0);
-
-    txcnt = strlen(banner_str);
-    puts_com(DID_UART0, (VB *)banner_str, &txcnt, TMO_FEVR);
-
-    /* EnterKeyが入力されるまで，0~9を順に出力する */
-    for(i = 0;;) {
-        ercd = getc_com(DID_UART0, &chr, 0, 10);
-        if (ercd == E_OK) {
-            putc_com(DID_UART0, chr, TMO_FEVR);
-            if (chr == (VB)'\r') {
-                putc_com(DID_UART0, (VB)'\n', TMO_FEVR);
-            }
-            break;
-        }
-        dly_tsk(989);
-        chr = (VB)(i + '0');
-        putc_com(DID_UART0, chr, TMO_FEVR);
-        if (++i >= 10)
-            i = 0;
-    }
-
-    act_tsk(RcvTaskID);
-    for(;;) {
-        rcv_mbx(MbxID, (T_MSG **)&blk);
-        puts_com(DID_UART0, blk->buf, &blk->cnt, TMO_FEVR);
-        rel_mpf(MpfID, (VP)blk);
-        ctr_com(DID_UART0, CLN_TXBUF, 100);
-    }
+	if (ercd < E_OK) {
+		test_error = ercd;
+	}
 }
 
-const T_CTSK ctsk_snd = {TA_HLNG|TA_ACT|TA_FPU, (VP_INT)0, (FP)SndTask, 4, 0x400, 0, "SndTask"};
-
-
-/*******************************
-        Rcv Task
- *******************************/
-void RcvTask(VP_INT exinf)
+LOCAL void producer_task(INT stacd, void *exinf)
 {
-    T_MSGBLK *blk;
+	ER ercd;
 
-    for(;;) {
-        get_mpf(MpfID, (VP *)&blk);
-        blk->cnt = sizeof(blk->buf) - 1;
-        gets_com(DID_UART0, blk->buf, 0, '\r', &blk->cnt, TMO_FEVR);
-        *((VB *)blk->buf + blk->cnt) = '\n';
-        blk->cnt++;
-        snd_mbx(MbxID, (T_MSG *)blk);
-    }
+	(void)stacd;
+	(void)exinf;
+	for (;;) {
+		produced_count++;
+		ercd = tk_sig_sem(test_semid, 1);
+		record_error(ercd);
+		ercd = tk_dly_tsk(TEST_PRODUCER_PERIOD);
+		record_error(ercd);
+	}
 }
 
-const T_CTSK ctsk_rcv = {TA_HLNG|TA_FPU, (VP_INT)0, (FP)RcvTask, 5, 0x400, 0, "RcvTask"};
-
-
-/*******************************
-        LED Task
- *******************************/
-void LEDTask(VP_INT exinf)
+LOCAL void consumer_task(INT stacd, void *exinf)
 {
-    /* Blinking LED1, LED2 */
-    while (1) {
-        REG_GPIO6.OUTDTL = ~(0x01U << 24);
-        REG_GPIO6.OUTDTH = 0x01U << 25;
-        dly_tsk(500);
-        REG_GPIO6.OUTDTH = 0x01U << 24;
-        REG_GPIO6.OUTDTL = ~(0x01U << 25);
-        dly_tsk(500);
-    }
+	ER ercd;
+
+	(void)stacd;
+	(void)exinf;
+	for (;;) {
+		ercd = tk_wai_sem(test_semid, 1, TMO_FEVR);
+		if (ercd >= E_OK) {
+			consumed_count++;
+		} else {
+			record_error(ercd);
+		}
+	}
 }
 
-const T_CTSK ctsk_led = {TA_HLNG|TA_ACT|TA_FPU, (VP_INT)0, (FP)LEDTask, 8, 0x400, 0, "LEDTask"};
-
-
-/*******************************
-      OSの初期化ルーチン
- *******************************/
-void initpr(void)
+LOCAL void led_task(INT stacd, void *exinf)
 {
-    extern const T_DEXC dexc_vfp;
-    extern const T_DEXC dexc_dta;
-    extern const T_DEXC dexc_pra;
-    def_exc(EXC_UDF, (T_DEXC *)&dexc_vfp);
-    def_exc(EXC_PRA, (T_DEXC *)&dexc_dta);
-    def_exc(EXC_DTA, (T_DEXC *)&dexc_pra);
+	ER ercd;
 
-    _ddr_cortexa_gtimer_init(CFG_KRN_TICK, (260000000U / 8U));
-    _ddr_rzg1_scif_init(DID_UART0, &REG_SCIF0);
-
-    SndTaskID = acre_tsk((T_CTSK *)&ctsk_snd);
-    RcvTaskID = acre_tsk((T_CTSK *)&ctsk_rcv);
-    LEDTaskID = acre_tsk((T_CTSK *)&ctsk_led);
-    MpfID = acre_mpf((T_CMPF *)&cmpf);
-    MbxID = acre_mbx((T_CMBX *)&cmbx);
+	(void)stacd;
+	(void)exinf;
+	for (;;) {
+		out_w(GPIO6_OUTDTL, ~LED1_MASK);
+		out_w(GPIO6_OUTDTH, LED2_MASK);
+		ercd = tk_dly_tsk(500);
+		record_error(ercd);
+		out_w(GPIO6_OUTDTH, LED1_MASK);
+		out_w(GPIO6_OUTDTL, ~LED2_MASK);
+		ercd = tk_dly_tsk(500);
+		record_error(ercd);
+	}
 }
 
-
-/*******************************
-      main entry
- *******************************/
-extern void board_init(void);
-
-int main(void)
+LOCAL void cyclic_handler(void *exinf)
 {
-    extern UB SYSMEM[];
-    extern UB STKMEM[];
-    extern UB MPLMEM[];
-    ER ercd;
-    T_CSYS csys;
+	(void)exinf;
+	cyclic_count++;
+}
 
-    /* ダミーアクセス */
+LOCAL ID create_task(FP entry, PRI priority)
+{
+	T_CTSK ctsk = {
+		.exinf = NULL,
+		.tskatr = TA_HLNG,
+		.task = entry,
+		.itskpri = priority,
+		.stksz = TEST_TASK_STACK_SIZE,
+		.bufptr = NULL
+	};
+	ID taskid;
+	ER ercd;
 
-    SYSMEM[0] = 0;
-    STKMEM[0] = 0;
-    MPLMEM[0] = 0;
+	taskid = tk_cre_tsk(&ctsk);
+	if (taskid < E_OK) return taskid;
+	ercd = tk_sta_tsk(taskid, 0);
+	if (ercd < E_OK) return ercd;
+	return taskid;
+}
 
-    /* ハードウェアの初期化の残り */
+EXPORT INT usermain(void)
+{
+	const T_CSEM csem = {
+		.exinf = NULL,
+		.sematr = TA_TFIFO,
+		.isemcnt = 0,
+		.maxsem = 1
+	};
+	const T_CCYC ccyc = {
+		.exinf = NULL,
+		.cycatr = TA_HLNG | TA_STA,
+		.cychdr = (FP)cyclic_handler,
+		.cyctim = TEST_PRODUCER_PERIOD,
+		.cycphs = TEST_PRODUCER_PERIOD
+	};
+	UW previous_produced = 0;
+	UW previous_consumed = 0;
+	UW previous_cyclic = 0;
+	ER ercd;
+	ID object_id;
 
-    board_init();
-    _ddr_gic_init(CFG_GIC_BASE);
+	tm_printf((const UB *)"\n[MTK][BOOT] AP-RZG-0A RZ/G1E CPU0\n");
+	tm_printf((const UB *)"[MTK][TEST] task+delay+semaphore+cyclic+LED\n");
 
-    csys.tskpri_max = CFG_KRN_TSKPRI_MAX;
-    csys.tskid_max  = CFG_KRN_TSKID_MAX;
-    csys.semid_max  = CFG_KRN_SEMID_MAX;
-    csys.flgid_max  = CFG_KRN_FLGID_MAX;
-    csys.dtqid_max  = CFG_KRN_DTQID_MAX;
-    csys.mbxid_max  = CFG_KRN_MBXID_MAX;
-    csys.mtxid_max  = CFG_KRN_MTXID_MAX;
-    csys.mbfid_max  = CFG_KRN_MBFID_MAX;
-    csys.porid_max  = CFG_KRN_PORID_MAX;
-    csys.mpfid_max  = CFG_KRN_MPFID_MAX;
-    csys.mplid_max  = CFG_KRN_MPLID_MAX;
-    csys.almid_max  = CFG_KRN_ALMID_MAX;
-    csys.cycid_max  = CFG_KRN_CYCID_MAX;
-    csys.isrid_max  = CFG_KRN_ISRID_MAX;
-    csys.devid_max  = CFG_KRN_DEVID_MAX;
-    csys.tick       = CFG_KRN_TICK;
-    csys.ssb_num    = CFG_KRN_SSB_NUM;
-    csys.sysmem_top = (VP)&SYSMEM[0];
-    csys.sysmem_end = (VP)&SYSMEM[CFG_KRN_SYSMEM_SZ];
-    csys.stkmem_top = (VP)&STKMEM[0];
-    csys.stkmem_end = (VP)&STKMEM[CFG_KRN_STKMEM_SZ];
-    csys.mplmem_top = (VP)&MPLMEM[0];
-    csys.mplmem_end = (VP)&MPLMEM[CFG_KRN_MPLMEM_SZ];
-    csys.sysidl = SYSTEM_IDLE;
-    csys.inistk = STACK_ID_INIT;
-    csys.trace = TRACE_DISABLE;
-    csys.agent = AGENT_DISABLE;
+	test_semid = tk_cre_sem(&csem);
+	if (test_semid < E_OK) {
+		tm_printf((const UB *)"[MTK][FAIL] tk_cre_sem=%d\n", test_semid);
+		for (;;) { ; }
+	}
 
-    ercd = start_uC3(&csys, initpr);
+	object_id = tk_cre_cyc(&ccyc);
+	if (object_id < E_OK) {
+		tm_printf((const UB *)"[MTK][FAIL] tk_cre_cyc=%d\n", object_id);
+		for (;;) { ; }
+	}
 
-    /* It does not reach */
-    return (int)ercd;
+	object_id = create_task((FP)producer_task, 5);
+	if (object_id < E_OK) record_error(object_id);
+	object_id = create_task((FP)consumer_task, 6);
+	if (object_id < E_OK) record_error(object_id);
+	object_id = create_task((FP)led_task, 8);
+	if (object_id < E_OK) record_error(object_id);
+
+	for (;;) {
+		UW produced;
+		UW consumed;
+		UW cyclic;
+		UINT imask;
+		BOOL progress_ok;
+
+		ercd = tk_dly_tsk(TEST_REPORT_PERIOD);
+		record_error(ercd);
+
+		DI(imask);
+		produced = produced_count;
+		consumed = consumed_count;
+		cyclic = cyclic_count;
+		EI(imask);
+
+		progress_ok = (produced > previous_produced)
+			&& (consumed > previous_consumed)
+			&& (cyclic > previous_cyclic)
+			&& (consumed <= produced)
+			&& ((produced - consumed) <= 1U)
+			&& (test_error == E_OK);
+
+		tm_printf((const UB *)"[MTK][%s] produced=%lu consumed=%lu cyclic=%lu err=%ld\n",
+			progress_ok ? "PASS" : "FAIL",
+			produced, consumed, cyclic, test_error);
+
+		previous_produced = produced;
+		previous_consumed = consumed;
+		previous_cyclic = cyclic;
+	}
 }
