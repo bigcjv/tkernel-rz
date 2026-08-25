@@ -41,6 +41,11 @@
 #define Csym(sym) sym
 #endif
 
+#ifdef _AP_RZG0A_RZG1E_
+#include "sysdepend/ap_rzg0a_rzg1e/machine.h"
+#define Csym(sym) sym
+#endif
+
 #ifdef _STM32_NUCLEO_N657_EXTSEC_
 #include "sysdepend/nucleo_stm32n6/machine.h"
 #define Csym(sym) sym
@@ -67,5 +72,18 @@
 #define _WEAK_ENTRY(name) .weak name
 
 #endif /* __GNUC__ */
+
+#ifdef __ICCARM__
+
+#define Inline static inline
+#define Asm asm
+#define Noinit(decl) __no_init decl
+#define Section(decl,name) decl @ #name
+#define WEAK_FUNC __weak
+
+#define _VECTOR_ENTRY(name) DCD name
+#define _WEAK_ENTRY(name) PUBWEAK name
+
+#endif /* __ICCARM__ */
 
 #endif /* __SYS_MACHINE_H__ */

@@ -28,6 +28,7 @@
 	  #define _IOTE_RX231_
 	  #define _IOTE_STM32L4_
 	  #define _IOTE_RZA2M_
+	  #define _AP_RZG0A_RZG1E_
  */
 
 /*---------------------------------------------------------------------- */
@@ -39,7 +40,7 @@
 
 #define	CNF_MAX_TSKPRI		32	/* Task Max priority */
 
-#define CNF_TIMER_PERIOD	10	/* System timer period */
+#define CNF_TIMER_PERIOD	1	/* System timer period */
 
 /* Maximum number of kernel objects */
 #define CNF_MAX_TSKID		32	/* Task */
@@ -123,8 +124,8 @@
  * Static allocation of system memory
  *     Enabling this setting statically allocates system memory space as variables.
  */
-#define USE_STATIC_SYS_MEM	(0)		/* 1:Valid   0:invalid */
-#define SYSTEM_MEM_SIZE		(15*1024)	/* Memory size to statically allocate. */
+#define USE_STATIC_SYS_MEM	(1)		/* 1:Valid   0:invalid */
+#define SYSTEM_MEM_SIZE		(128*1024)	/* Memory size to statically allocate. */
 
 /* ------------------------------------------------------------------------ */
 /*
@@ -160,10 +161,10 @@
 /* Use Co-Processor.
  *  1: Valid  0: Invalid
  */
-#define	USE_FPU			(1)	/* Use FPU */
+#define	USE_FPU			(0)	/* First bring-up: no FPU context switch */
 #define	USE_DSP			(0)	/* Use DSP */
 
-#define	ALWAYS_FPU_ATR		(1)	/* Always set the TA_FPU attribute on all tasks */
+#define	ALWAYS_FPU_ATR		(0)	/* FPU is disabled during first bring-up */
 
 /*---------------------------------------------------------------------- */
 /* Use Physical timer.
