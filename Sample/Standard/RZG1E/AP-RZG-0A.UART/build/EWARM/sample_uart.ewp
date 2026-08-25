@@ -125,7 +125,7 @@
                 <option>
                     <name>FPU2</name>
                     <version>0</version>
-                    <state>5</state>
+                    <state>0</state>
                 </option>
                 <option>
                     <name>NrRegs</name>
@@ -134,7 +134,7 @@
                 </option>
                 <option>
                     <name>NEON</name>
-                    <state>1</state>
+                    <state>0</state>
                 </option>
                 <option>
                     <name>GFPUCoreSlave2</name>
@@ -231,7 +231,7 @@
                 <debug>1</debug>
                 <option>
                     <name>CCDefines</name>
-                    <state></state>
+                    <state>_AP_RZG0A_RZG1E_</state>
                 </option>
                 <option>
                     <name>CCPreprocFile</name>
@@ -352,8 +352,9 @@
                 </option>
                 <option>
                     <name>CCIncludePath2</name>
-                    <state>$PROJ_DIR$\..\..\..\..\..\..\Kernel\Standard\inc</state>
-                    <state>$PROJ_DIR$\..\..\..\..\..\..\Kernel\Standard\inc\CortexA</state>
+                    <state>$PROJ_DIR$\..\..\..\..\..\..\Kernel\mtkernel\include</state>
+                    <state>$PROJ_DIR$\..\..\..\..\..\..\Kernel\mtkernel\config</state>
+                    <state>$PROJ_DIR$\..\..\..\..\..\..\Kernel\mtkernel\kernel\knlinc</state>
                     <state>$PROJ_DIR$\..\..\..\..\..\..\Driver\Standard\inc</state>
                     <state>$PROJ_DIR$\..\..\src</state>
                 </option>
@@ -835,7 +836,7 @@
                 </option>
                 <option>
                     <name>IlinkAdditionalLibs</name>
-                    <state>$PROJ_DIR$\..\..\..\..\..\..\Kernel\Standard\lib\CortexA\EWARM\v8\uC3cortexahl.a</state>
+                    <state></state>
                 </option>
                 <option>
                     <name>IlinkOverrideProgramEntryLabel</name>
@@ -1243,7 +1244,7 @@
                 <option>
                     <name>FPU2</name>
                     <version>0</version>
-                    <state>5</state>
+                    <state>0</state>
                 </option>
                 <option>
                     <name>NrRegs</name>
@@ -1252,7 +1253,7 @@
                 </option>
                 <option>
                     <name>NEON</name>
-                    <state>1</state>
+                    <state>0</state>
                 </option>
                 <option>
                     <name>GFPUCoreSlave2</name>
@@ -1350,6 +1351,7 @@
                 <option>
                     <name>CCDefines</name>
                     <state>NDEBUG</state>
+                    <state>_AP_RZG0A_RZG1E_</state>
                 </option>
                 <option>
                     <name>CCPreprocFile</name>
@@ -1470,8 +1472,9 @@
                 </option>
                 <option>
                     <name>CCIncludePath2</name>
-                    <state>$PROJ_DIR$\..\..\..\..\..\..\Kernel\Standard\inc</state>
-                    <state>$PROJ_DIR$\..\..\..\..\..\..\Kernel\Standard\inc\CortexA</state>
+                    <state>$PROJ_DIR$\..\..\..\..\..\..\Kernel\mtkernel\include</state>
+                    <state>$PROJ_DIR$\..\..\..\..\..\..\Kernel\mtkernel\config</state>
+                    <state>$PROJ_DIR$\..\..\..\..\..\..\Kernel\mtkernel\kernel\knlinc</state>
                     <state>$PROJ_DIR$\..\..\..\..\..\..\Driver\Standard\inc</state>
                     <state>$PROJ_DIR$\..\..\src</state>
                 </option>
@@ -1953,7 +1956,7 @@
                 </option>
                 <option>
                     <name>IlinkAdditionalLibs</name>
-                    <state>$PROJ_DIR$\..\..\..\..\..\..\Kernel\Standard\lib\CortexA\EWARM\v8\uC3cortexahl.a</state>
+                    <state></state>
                 </option>
                 <option>
                     <name>IlinkOverrideProgramEntryLabel</name>
@@ -2237,51 +2240,72 @@
             <data />
         </settings>
     </configuration>
-    <file>
-        <name>$PROJ_DIR$\..\..\..\..\..\..\Driver\Standard\src\DDR_COM.c</name>
-    </file>
-    <file>
-        <name>$PROJ_DIR$\..\..\..\..\..\..\Driver\Standard\src\DDR_CortexA_GIC.c</name>
-    </file>
-    <file>
-        <name>$PROJ_DIR$\..\..\..\..\..\..\Driver\Standard\src\EWARM\DDR_CortexA_GIC_sub.c</name>
-    </file>
-    <file>
-        <name>$PROJ_DIR$\..\..\..\..\..\..\Driver\Standard\src\DDR_CortexA_GTIMER.c</name>
-    </file>
-    <file>
-        <name>$PROJ_DIR$\..\..\..\..\..\..\Driver\Standard\src\EWARM\DDR_CortexA_GTIMER_sub.c</name>
-    </file>
-    <file>
-        <name>$PROJ_DIR$\..\..\..\..\..\..\Driver\Standard\src\EWARM\DDR_CortexA_MMU.s79</name>
-    </file>
-    <file>
-        <name>$PROJ_DIR$\..\..\..\..\..\..\Driver\Standard\src\DDR_RZG1_SCIF.c</name>
-    </file>
-    <file>
-        <name>$PROJ_DIR$\..\..\src\exception.c</name>
-    </file>
-    <file>
-        <name>$PROJ_DIR$\..\..\src\GL_kernel_id.c</name>
-    </file>
-    <file>
-        <name>$PROJ_DIR$\..\..\src\hw_init.c</name>
-    </file>
-    <file>
-        <name>$PROJ_DIR$\..\..\src\EWARM\krn_mem.c</name>
-    </file>
-    <file>
-        <name>$PROJ_DIR$\..\..\src\mmutbl_cfg.c</name>
-    </file>
-    <file>
-        <name>$PROJ_DIR$\..\..\src\EWARM\prst.s79</name>
-    </file>
-    <file>
-        <name>$PROJ_DIR$\..\..\src\sample.c</name>
-    </file>
-    <file>
-        <name>$PROJ_DIR$\..\..\src\EWARM\vector.s79</name>
-    </file>
+    <group>
+        <name>Application</name>
+        <file>
+            <name>$PROJ_DIR$\..\..\src\mmutbl_cfg.c</name>
+        </file>
+    </group>
+    <group>
+        <name>micro T-Kernel Core</name>
+        <file><name>$PROJ_DIR$\..\..\..\..\..\..\Kernel\mtkernel\kernel\sysinit\sysinit.c</name></file>
+        <file><name>$PROJ_DIR$\..\..\..\..\..\..\Kernel\mtkernel\kernel\inittask\inittask.c</name></file>
+        <file><name>$PROJ_DIR$\..\..\..\..\..\..\Kernel\mtkernel\kernel\usermain\usermain.c</name></file>
+        <file><name>$PROJ_DIR$\..\..\..\..\..\..\Kernel\mtkernel\kernel\tstdlib\bitop.c</name></file>
+        <file><name>$PROJ_DIR$\..\..\..\..\..\..\Kernel\mtkernel\kernel\tstdlib\string.c</name></file>
+        <file><name>$PROJ_DIR$\..\..\..\..\..\..\Kernel\mtkernel\kernel\tkernel\cpuctl.c</name></file>
+        <file><name>$PROJ_DIR$\..\..\..\..\..\..\Kernel\mtkernel\kernel\tkernel\device.c</name></file>
+        <file><name>$PROJ_DIR$\..\..\..\..\..\..\Kernel\mtkernel\kernel\tkernel\deviceio.c</name></file>
+        <file><name>$PROJ_DIR$\..\..\..\..\..\..\Kernel\mtkernel\kernel\tkernel\eventflag.c</name></file>
+        <file><name>$PROJ_DIR$\..\..\..\..\..\..\Kernel\mtkernel\kernel\tkernel\int.c</name></file>
+        <file><name>$PROJ_DIR$\..\..\..\..\..\..\Kernel\mtkernel\kernel\tkernel\klock.c</name></file>
+        <file><name>$PROJ_DIR$\..\..\..\..\..\..\Kernel\mtkernel\kernel\tkernel\mailbox.c</name></file>
+        <file><name>$PROJ_DIR$\..\..\..\..\..\..\Kernel\mtkernel\kernel\tkernel\memory.c</name></file>
+        <file><name>$PROJ_DIR$\..\..\..\..\..\..\Kernel\mtkernel\kernel\tkernel\mempfix.c</name></file>
+        <file><name>$PROJ_DIR$\..\..\..\..\..\..\Kernel\mtkernel\kernel\tkernel\mempool.c</name></file>
+        <file><name>$PROJ_DIR$\..\..\..\..\..\..\Kernel\mtkernel\kernel\tkernel\messagebuf.c</name></file>
+        <file><name>$PROJ_DIR$\..\..\..\..\..\..\Kernel\mtkernel\kernel\tkernel\misc_calls.c</name></file>
+        <file><name>$PROJ_DIR$\..\..\..\..\..\..\Kernel\mtkernel\kernel\tkernel\mutex.c</name></file>
+        <file><name>$PROJ_DIR$\..\..\..\..\..\..\Kernel\mtkernel\kernel\tkernel\objname.c</name></file>
+        <file><name>$PROJ_DIR$\..\..\..\..\..\..\Kernel\mtkernel\kernel\tkernel\power.c</name></file>
+        <file><name>$PROJ_DIR$\..\..\..\..\..\..\Kernel\mtkernel\kernel\tkernel\rendezvous.c</name></file>
+        <file><name>$PROJ_DIR$\..\..\..\..\..\..\Kernel\mtkernel\kernel\tkernel\semaphore.c</name></file>
+        <file><name>$PROJ_DIR$\..\..\..\..\..\..\Kernel\mtkernel\kernel\tkernel\task.c</name></file>
+        <file><name>$PROJ_DIR$\..\..\..\..\..\..\Kernel\mtkernel\kernel\tkernel\task_manage.c</name></file>
+        <file><name>$PROJ_DIR$\..\..\..\..\..\..\Kernel\mtkernel\kernel\tkernel\task_sync.c</name></file>
+        <file><name>$PROJ_DIR$\..\..\..\..\..\..\Kernel\mtkernel\kernel\tkernel\time_calls.c</name></file>
+        <file><name>$PROJ_DIR$\..\..\..\..\..\..\Kernel\mtkernel\kernel\tkernel\timer.c</name></file>
+        <file><name>$PROJ_DIR$\..\..\..\..\..\..\Kernel\mtkernel\kernel\tkernel\tkinit.c</name></file>
+        <file><name>$PROJ_DIR$\..\..\..\..\..\..\Kernel\mtkernel\kernel\tkernel\wait.c</name></file>
+        <file><name>$PROJ_DIR$\..\..\..\..\..\..\Kernel\mtkernel\lib\libtk\fastlock.c</name></file>
+        <file><name>$PROJ_DIR$\..\..\..\..\..\..\Kernel\mtkernel\lib\libtk\fastmlock.c</name></file>
+        <file><name>$PROJ_DIR$\..\..\..\..\..\..\Kernel\mtkernel\lib\libtk\kmalloc.c</name></file>
+        <file><name>$PROJ_DIR$\..\..\..\..\..\..\Kernel\mtkernel\lib\libtm\libtm.c</name></file>
+        <file><name>$PROJ_DIR$\..\..\..\..\..\..\Kernel\mtkernel\lib\libtm\libtm_printf.c</name></file>
+    </group>
+    <group>
+        <name>RZG1E Target</name>
+        <file><name>$PROJ_DIR$\..\..\..\..\..\..\Kernel\mtkernel\kernel\sysdepend\ap_rzg0a_rzg1e\cpu_clock.c</name></file>
+        <file><name>$PROJ_DIR$\..\..\..\..\..\..\Kernel\mtkernel\kernel\sysdepend\ap_rzg0a_rzg1e\devinit.c</name></file>
+        <file><name>$PROJ_DIR$\..\..\..\..\..\..\Kernel\mtkernel\kernel\sysdepend\ap_rzg0a_rzg1e\hw_setting.c</name></file>
+        <file><name>$PROJ_DIR$\..\..\..\..\..\..\Kernel\mtkernel\kernel\sysdepend\ap_rzg0a_rzg1e\power_save.c</name></file>
+        <file><name>$PROJ_DIR$\..\..\..\..\..\..\Kernel\mtkernel\kernel\sysdepend\ap_rzg0a_rzg1e\sys_start.c</name></file>
+        <file><name>$PROJ_DIR$\..\..\..\..\..\..\Kernel\mtkernel\kernel\sysdepend\cpu\rzg1e\interrupt.c</name></file>
+        <file><name>$PROJ_DIR$\..\..\..\..\..\..\Kernel\mtkernel\lib\libtk\sysdepend\cpu\rzg1e\int_rzg1e.c</name></file>
+        <file><name>$PROJ_DIR$\..\..\..\..\..\..\Kernel\mtkernel\lib\libtk\sysdepend\cpu\rzg1e\wusec_rzg1e.c</name></file>
+        <file><name>$PROJ_DIR$\..\..\..\..\..\..\Kernel\mtkernel\lib\libtm\sysdepend\ap_rzg0a_rzg1e\tm_com.c</name></file>
+    </group>
+    <group>
+        <name>ARMv7-A Core</name>
+        <file><name>$PROJ_DIR$\..\..\..\..\..\..\Kernel\mtkernel\kernel\sysdepend\cpu\core\armv7a\cpu_cntl.c</name></file>
+        <file><name>$PROJ_DIR$\..\..\..\..\..\..\Kernel\mtkernel\kernel\sysdepend\cpu\core\armv7a\exc_hdl.c</name></file>
+    </group>
+    <group>
+        <name>IAR Startup</name>
+        <file><name>$PROJ_DIR$\..\..\..\..\..\..\Kernel\mtkernel\kernel\sysdepend\cpu\rzg1e\EWARM\mtk_startup.s79</name></file>
+        <file><name>$PROJ_DIR$\..\..\..\..\..\..\Kernel\mtkernel\kernel\sysdepend\cpu\rzg1e\EWARM\mtk_context.s79</name></file>
+        <file><name>$PROJ_DIR$\..\..\..\..\..\..\Driver\Standard\src\EWARM\DDR_CortexA_MMU.s79</name></file>
+    </group>
     <projectSettings>
         <general>
             <resolveSourceForBinaries>true</resolveSourceForBinaries>

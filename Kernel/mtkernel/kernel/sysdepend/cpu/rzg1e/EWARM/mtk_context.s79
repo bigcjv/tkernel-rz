@@ -1,0 +1,292 @@
+; micro T-Kernel ARMv7-A exception entry and dispatcher in IAR syntax.
+
+        REQUIRE8
+        PRESERVE8
+
+PSR_SVC         EQU     0x13
+PSR_T           EQU     0x20
+PSR_I           EQU     0x80
+TCB_CTX         EQU     24
+CTX_SSP         EQU     0
+N_INTVEC        EQU     415
+GICC_IAR        EQU     0xF100200C
+GICC_EOIR       EQU     0xF1002010
+
+        SECTION IRQ_STACK:DATA:NOROOT(3)
+        SECTION FIQ_STACK:DATA:NOROOT(3)
+        SECTION ABT_STACK:DATA:NOROOT(3)
+        SECTION UND_STACK:DATA:NOROOT(3)
+        SECTION SVC_STACK:DATA:NOROOT(3)
+
+        IMPORT  knl_intvec_tbl
+        IMPORT  knl_hll_inthdr_tbl
+        IMPORT  knl_svcvec_tbl
+        IMPORT  knl_taskindp
+        IMPORT  knl_dispatch_disabled
+        IMPORT  knl_ctxtsk
+        IMPORT  knl_schedtsk
+        IMPORT  knl_lowpow_discnt
+        IMPORT  low_pow
+        IMPORT  Default_Handler
+        IMPORT  SVC_default_Handler
+        IMPORT  FIQ_Handler
+        IMPORT  UndefinedInst_Handler
+        IMPORT  PrefetchAbort_Handler
+        IMPORT  DataAbort_Handler
+
+        SECTION .text:CODE:NOROOT(2)
+        CODE32
+
+        PUBLIC  irq_entry
+irq_entry:
+        SUB     lr, lr, #4
+        SRSDB   sp!, #PSR_SVC
+        CPS     #PSR_SVC
+        STMFD   sp!, {r0-r3, r12, lr}
+
+        LDR     lr, =GICC_IAR
+        LDR     r1, [lr]
+        MOV     r0, r1, LSL #22
+        MOV     r0, r0, LSR #22
+        LDR     lr, =N_INTVEC
+        CMP     r0, lr
+        BGE     irq_abnormal
+        LDR     lr, =knl_intvec_tbl
+        ADD     lr, lr, r0, LSL #2
+        LDR     lr, [lr]
+        CMP     lr, #0
+        BXNE    lr
+        B       irq_default
+
+irq_abnormal:
+        LDR     lr, =0x3FF
+        CMP     r0, lr
+        BEQ     irq_return
+irq_default:
+        LDR     lr, =GICC_EOIR
+        STR     r1, [lr]
+        LDR     lr, =Default_Handler
+        BX      lr
+irq_return:
+        LDMFD   sp!, {r0-r3, r12, lr}
+        RFEFD   sp!
+
+        PUBLIC  svc_entry
+svc_entry:
+        SRSDB   sp!, #PSR_SVC
+        STMFD   sp!, {r0-r3, r12, lr}
+        MVN     r0, #0
+        STR     r0, [sp, #(5 * 4)]
+        MRS     r0, spsr
+        TST     r0, #PSR_T
+        LDRHNE  r0, [lr, #-2]
+        LDREQ   r0, [lr, #-4]
+        BICNE   r0, r0, #0xFF00
+        BICEQ   r0, r0, #0xFF000000
+        CMP     r0, #11
+        BGE     SVC_default_Handler
+        LDR     lr, =knl_svcvec_tbl
+        ADD     lr, lr, r0, LSL #2
+        LDR     lr, [lr]
+        CMP     lr, #0
+        BXNE    lr
+        B       SVC_default_Handler
+
+        PUBLIC  fiq_entry
+fiq_entry:
+        SUB     lr, lr, #4
+        LDR     sp, =SFE(FIQ_STACK)
+        STMFD   sp!, {r0-r3, r12, lr}
+        LDR     lr, =FIQ_Handler
+        BX      lr
+
+        PUBLIC  undef_entry
+undef_entry:
+        LDR     sp, =SFE(UND_STACK)
+        STMFD   sp!, {r0-r3, r12, lr}
+        LDR     lr, =UndefinedInst_Handler
+        BX      lr
+
+        PUBLIC  iabort_entry
+iabort_entry:
+        SUB     lr, lr, #4
+        LDR     sp, =SFE(ABT_STACK)
+        STMFD   sp!, {r0-r3, r12, lr}
+        LDR     lr, =PrefetchAbort_Handler
+        BX      lr
+
+        PUBLIC  dabort_entry
+dabort_entry:
+        SUB     lr, lr, #8
+        LDR     sp, =SFE(ABT_STACK)
+        STMFD   sp!, {r0-r3, r12, lr}
+        LDR     lr, =DataAbort_Handler
+        BX      lr
+
+        PUBLIC  knl_hll_inthdr
+knl_hll_inthdr:
+        LDR     r12, =knl_taskindp
+        LDR     r2, [r12]
+        ADD     r2, r2, #1
+        STR     r2, [r12]
+        CMP     r2, #1
+        BNE     hll_nested
+        MOV     r3, sp
+        LDR     sp, =SFE(IRQ_STACK)
+        PUSH    {r2, r3}
+hll_nested:
+        LDR     r12, =knl_hll_inthdr_tbl
+        LDR     r12, [r12, r0, LSL #2]
+        BLX     r12
+        B       knl_return_inthdr
+
+        PUBLIC  knl_return_inthdr
+knl_return_inthdr:
+        CPSID   IA
+        LDR     r12, =knl_taskindp
+        LDR     r2, [r12]
+        SUB     r2, r2, #1
+        STR     r2, [r12]
+        CMP     r2, #0
+        BNE     inthdr_return
+        POP     {r2, r3}
+        MOV     sp, r3
+        LDR     r12, =knl_dispatch_disabled
+        LDR     r2, [r12]
+        CMP     r2, #0
+        BNE     inthdr_return
+        LDR     r12, =knl_ctxtsk
+        LDR     lr, =knl_schedtsk
+        LDR     r12, [r12]
+        LDR     lr, [lr]
+        CMP     r12, lr
+        BNE     knl_dispatch_entry
+inthdr_return:
+        LDMFD   sp!, {r0-r3, r12, lr}
+        RFEFD   sp!
+
+        PUBLIC  knl_dispatch_to_schedtsk
+knl_dispatch_to_schedtsk:
+        LDR     sp, =SFE(SVC_STACK)
+        LDR     r12, =knl_dispatch_disabled
+        MOV     r0, #1
+        STR     r0, [r12]
+        LDR     r4, =knl_ctxtsk
+        MOV     r0, #0
+        LDR     r8, [r4]
+        STR     r0, [r4]
+        B       dispatch_select
+
+        PUBLIC  knl_dispatch_entry
+knl_dispatch_entry:
+        LDR     r0, =knl_dispatch_disabled
+        MOV     r1, #1
+        STR     r1, [r0]
+        STMFD   sp!, {r4-r11}
+        LDR     r4, =knl_ctxtsk
+        MOV     r0, #0
+        LDR     r8, [r4]
+        CMP     r8, #0
+        STRNE   sp, [r8, #(TCB_CTX + CTX_SSP)]
+        STRNE   r0, [r4]
+
+dispatch_select:
+        LDR     r5, =knl_schedtsk
+        LDR     r6, =knl_lowpow_discnt
+dispatch_wait:
+        CPSID   IA
+        LDR     r8, [r5]
+        CMP     r8, #0
+        BNE     dispatch_restore
+        LDR     r12, [r6]
+        CMP     r12, #0
+        BNE     dispatch_no_lowpow
+        BL      low_pow
+dispatch_no_lowpow:
+        CPSIE   IA
+        NOP
+        B       dispatch_wait
+
+dispatch_restore:
+        STR     r8, [r4]
+        LDR     sp, [r8, #(TCB_CTX + CTX_SSP)]
+        LDMFD   sp!, {r4-r11}
+        LDR     r0, =knl_dispatch_disabled
+        MOV     r1, #0
+        STR     r1, [r0]
+        LDMFD   sp!, {r0-r3, r12, lr}
+        RFEFD   sp!
+
+        PUBLIC  rzg1e_get_cpsr
+rzg1e_get_cpsr:
+        MRS     r0, cpsr
+        BX      lr
+
+        PUBLIC  rzg1e_disint
+rzg1e_disint:
+        MRS     r0, cpsr
+        AND     r0, r0, #PSR_I
+        CPSID   I
+        BX      lr
+
+        PUBLIC  rzg1e_enaint
+rzg1e_enaint:
+        TST     r0, #PSR_I
+        BEQ     rzg1e_enable_irq
+        CPSID   I
+        BX      lr
+rzg1e_enable_irq:
+        CPSIE   I
+        BX      lr
+
+        PUBLIC  rzg1e_svc_force_dispatch
+rzg1e_svc_force_dispatch:
+        SVC     7
+        BX      lr
+
+        PUBLIC  rzg1e_svc_dispatch
+rzg1e_svc_dispatch:
+        SVC     8
+        BX      lr
+
+        PUBLIC  rzg1e_gtimer_start
+rzg1e_gtimer_start:
+        LDR     r1, =32500000
+        MCR     p15, 0, r1, c14, c0, 0
+        MCR     p15, 0, r0, c14, c2, 0
+        MOV     r1, #1
+        MCR     p15, 0, r1, c14, c2, 1
+        ISB
+        BX      lr
+
+        PUBLIC  rzg1e_gtimer_reload
+rzg1e_gtimer_reload:
+        MRC     p15, 0, r1, c14, c2, 0
+        CMP     r1, #0
+        ADDLT   r0, r0, r1
+        CMP     r0, #1
+        MOVLT   r0, #1
+        MCR     p15, 0, r0, c14, c2, 0
+        ISB
+        BX      lr
+
+        PUBLIC  rzg1e_gtimer_stop
+rzg1e_gtimer_stop:
+        MOV     r0, #2
+        MCR     p15, 0, r0, c14, c2, 1
+        ISB
+        BX      lr
+
+        PUBLIC  rzg1e_gtimer_value
+rzg1e_gtimer_value:
+        ISB
+        MRC     p15, 0, r0, c14, c2, 0
+        BX      lr
+
+        PUBLIC  rzg1e_gtimer_counter
+rzg1e_gtimer_counter:
+        ISB
+        MRRC    p15, 0, r0, r1, c14
+        BX      lr
+
+        END

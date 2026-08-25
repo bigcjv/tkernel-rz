@@ -12,7 +12,7 @@
  *            refactoring C code.
  ****************************************************************************
  */
-#include "kernel.h"
+#include <tk/tkernel.h>
 #include "DDR_CortexA_MMU.h"
 /******************************************************************************
  *      Target dependent MMU configuration
