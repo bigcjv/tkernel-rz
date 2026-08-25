@@ -1,0 +1,62 @@
+;/**
+; * @brief   interrupt vector  for Cortex-A7 MPCore
+; * @date    2018.11.29
+; * @author  Copyright (c) 2018, eForce Co.,Ltd.  All rights reserved.
+; *
+; * @par     History
+; *          - rev 1.0 (2018.11.29) yokota
+; *            Initial version.
+; */
+
+        REQUIRE8
+        PRESERVE8
+
+;
+; Start main
+;--------------------------------------------------------------------
+        IMPORT  _kernel_svchdr
+        IMPORT  _kernel_undhdr
+        IMPORT  _kernel_inthdr
+        IMPORT  _kernel_prahdr
+        IMPORT  _kernel_dtahdr
+        IMPORT  Reset_Handler
+
+
+        SECTION .intvec:CODE:NOROOT(2)
+        CODE32
+
+        PROGRAM ?PRST
+        PUBLIC  _PRST
+_PRST:
+        b       Reset_Handler
+        ldr     pc, _UndHandler
+        ldr     pc, _SwiHandler
+        ldr     pc, _PreHandler
+        ldr     pc, _AbtHandler
+        nop
+        ldr     pc, _IrqHandler
+        ldr     pc, _FiqHandler
+
+
+                 DCD     0
+_UndHandler:     DCD     _kernel_undhdr
+_SwiHandler:     DCD     _kernel_svchdr
+_PreHandler:     DCD     _kernel_prahdr
+_AbtHandler:     DCD     _kernel_dtahdr
+                 DCD     0
+_IrqHandler:     DCD     _kernel_inthdr
+_FiqHandler:     DCD     FiqHandler
+
+
+;****************************************************************************
+;       FIQ Handler                                                         *
+;                                                                           *
+;****************************************************************************
+        EXPORT  FiqHandler
+FiqHandler:
+        b     FiqHandler
+
+        LTORG
+        
+        END
+

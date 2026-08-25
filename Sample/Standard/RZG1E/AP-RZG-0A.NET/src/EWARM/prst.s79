@@ -1,0 +1,178 @@
+;/**
+; * @brief   Reset handler for SK-RZG1E (Cortex-M7 MPCore)
+; * @date    2016.05.09
+; * @author  Copyright (c) 2016, eForce Co.,Ltd.  All rights reserved.
+; *
+; * @par     History
+; *          - rev 1.0 (2016.05.09) i-cho
+; *            Initial version.
+; */
+
+        REQUIRE8
+        PRESERVE8        
+
+; Program Status Register
+;
+I_BIT           EQU     0x80
+F_BIT           EQU     0x40
+T_BIT           EQU     0x20
+USR_MOD         EQU     0x10
+FIQ_MOD         EQU     0x11
+IRQ_MOD         EQU     0x12
+SVC_MOD         EQU     0x13
+ABT_MOD         EQU     0x17
+UND_MOD         EQU     0x1B
+SYS_MOD         EQU     0x1F
+
+; Peripheral Register
+;
+RWDT_RWTCSRA    EQU     0xE6020004  ; RCLK watchdog timer control/status register A
+
+
+; Macro definition
+;
+        IMPORT  _PRST
+        IMPORT  ?main
+        IMPORT  _ddr_cortexa_mmu_init
+        IMPORT  _kernel_invalid_tlb
+        IMPORT  _kernel_invalid_cache
+        IMPORT  mmu_cfgtbl
+
+        SECTION IRQ_STACK:DATA:NOROOT(3)
+        SECTION FIQ_STACK:DATA:NOROOT(3)
+        SECTION SVC_STACK:DATA:NOROOT(3)
+        SECTION ABT_STACK:DATA:NOROOT(3)
+        SECTION UND_STACK:DATA:NOROOT(3)
+        SECTION CSTACK:DATA:NOROOT(3)
+        SECTION TLB_RAMSEC:DATA:ROOT(3)
+        
+        SECTION .text:CODE:NOROOT(2)        
+        CODE32
+        
+;****************************************************************************
+;       Power On Reset Handler                                              *
+;                                                                           *
+;****************************************************************************
+
+        EXPORT  Reset_Handler
+
+Reset_Handler
+        cpsid   if,  #SYS_MOD
+        ldr     sp,  =SFE(CSTACK)
+
+        mrc     p15,  0,    r0,  c0,  c0,  5   ; MPIDR register
+        and     r0,  r0, #0x0F
+
+        cmp     r0,  #0
+        beq     start_1     ; CPU0
+Reset_fault
+        wfe                 ; Unknown CPU!!
+        b       Reset_fault
+
+start_1
+;
+; Watchdog init (disabled)
+;----------------------------------------------------
+init_wdt
+        ldr     r0, =RWDT_RWTCSRA
+        ldr     r1, =0xA5A5A500
+        str     r1, [r0]
+
+;
+; Disable MMU
+;----------------------------
+        mrc     p15, 0,   r2,  c1,  c0,  0
+        bic     r2,  r2, #(0x1 << 12)       ; Clear I-Cache Control
+        bic     r2,  r2, #(0x1 <<  2)       ; Clear D-Cache Control
+        bic     r2,  r2, #(0x1 <<  1)       ; Clear A, bit  1, to disable strict alignment fault checking
+        bic     r2,  r2, #0x00000001        ; Clear MMU Control
+        dsb
+        mcr     p15, 0,  r2,  c1,  c0,  0
+        isb
+
+;
+; Invalidate cache and TLBs
+;----------------------------
+        bl      _kernel_invalid_cache
+        mov     r0,  #0x0                   ; BPIALL - Invalidate entire branch predictor array
+        mcr     p15, 0,  r0, c7,  c5,  6
+        bl      _kernel_invalid_tlb
+
+;
+; Set vector address
+;----------------------------
+        ldr     r0, =_PRST
+        mcr     p15, 0,  r0, c12,  c0,  0   ; set VBAR
+        isb
+        
+        ;; Disalbe high vector(V-bit is cleared)
+        mrc     p15, 0,  r0,  c1,  c0,  0
+        bic     r0,  r0, #(0x1 << 13)
+        mcr     p15, 0,  r0,  c1,  c0,  0
+
+;
+; Set ACTLR
+; must be set before the caches and MMU are enabled.
+;------------------------------------------------------
+        mrc     p15, 0,  r0,  c1,  c0,  1
+        orr     r0,  r0, #(0x1 << 6)         ; Set SMP bit 6 to enable coherent requests.
+        mcr     p15, 0,  r0,  c1,  c0,  1
+
+;
+; MMU initialization and address map setup
+;------------------------------------------------
+        ldr     r0,  =SFB(TLB_RAMSEC)
+        ldr     r1,  =mmu_cfgtbl
+        bl      _ddr_cortexa_mmu_init
+
+#ifdef __ARMVFP__
+;
+; Enable VFP
+;---------------------------------------------
+        mrc     p15, 0,  r0,  c1,  c0,  2
+        orr     r0,  r0, #0x00F00000    ; Enable access to CP 10 & 11
+        dsb
+        mcr     p15, 0,  r0,  c1,  c0,  2
+        isb
+        ;; Switch on the VFP and NEON hardware
+        mov     r1,  #0x40000000
+        fmxr    fpexc, r1               ; Write FPEXC register, EN bit set
+#endif
+
+;
+; Relocatable exec finished
+;-----------------------------
+        ldr     lr,  =abs_addr
+        bx      lr
+
+        LTORG
+abs_addr
+
+;
+; Initialize each stack pointer
+;----------------------------
+
+        cps     #FIQ_MOD
+        ldr     sp,  =SFE(FIQ_STACK)
+
+        cps     #UND_MOD
+        ldr     sp,  =SFE(UND_STACK)
+
+        cps     #ABT_MOD
+        ldr     sp,  =SFE(ABT_STACK)
+
+        cps     #SVC_MOD
+        ldr     sp,  =SFE(SVC_STACK)
+
+        cps     #IRQ_MOD
+        ldr     sp,  =SFE(IRQ_STACK)
+
+
+        cps     #SYS_MOD
+        ldr     lr,  =?main
+        bx      lr
+
+
+        LTORG
+
+        END

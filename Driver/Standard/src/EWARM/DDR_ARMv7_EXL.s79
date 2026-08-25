@@ -1,0 +1,106 @@
+/**
+ * @file    DDR_ARMv7_EXL.s79
+ * @brief   Micro C Cube Standard, Multi Core Extension
+ *          Exclusive Access (ARMv7-A Architecture)
+ * @date    2019.06.05
+ * @author  Copyright (c) 2019, eForce Co., Ltd. All rights reserved.
+ ******************************************************************************
+ * @par     History
+ *          - rev 1.0 (2019.06.05)
+ *            Created based on DDR_ARMv7_EXL.S
+ ******************************************************************************
+ */
+        SECTION .text:CODE:NOROOT(2)
+        CODE32
+
+        IMPORT get_cid
+
+/**
+ * spinlock
+ * void _kernel_spin_lock(UW *flag)
+ */
+        PUBLIC _kernel_spin_lock
+_kernel_spin_lock:
+        push    {r0,lr}
+        bl      get_cid
+        pop     {r2,lr}
+        mrs     r3,  cpsr
+        tst     r3,  #0x0F
+        swieq   #1
+        cpsid   a
+kernel_spin_lock_loop:
+        ldrex   r1,  [r2]
+        cmp     r1,  #0
+        moveq   r1,  #1
+        strexeq r1,  r0,  [r2]
+        cmpeq   r1,  #0
+        bne     kernel_spin_lock_loop
+        msr     cpsr_c,   r3
+        bx      lr
+
+/**
+ * unlock
+ * void _kernel_spin_unlock(UW *flag)
+ */
+        PUBLIC  _kernel_spin_unlock
+_kernel_spin_unlock:
+        push    {r0,lr}
+        bl      get_cid
+        pop     {r2,lr}
+        mrs     r12, cpsr
+        tst     r12, #0x0F
+        swieq   #1
+        cpsid   a
+        mov     r3,  #0
+_kernel_spin_unlock_loop:
+        ldrex   r1,  [r2]
+        cmp     r1,  r0
+        bne     _kernel_spin_unlock_end
+        mov     r1,  #1
+        strex   r1,  r3,  [r2]
+        cmp     r1,  #0
+        bne     _kernel_spin_unlock_loop
+_kernel_spin_unlock_end:
+        clrex
+        mov     r0,  r1
+        msr     cpsr_c,   r12
+        bx      lr
+
+
+/**
+ * Test and spinlock
+ * void _kernel_spin_lock_test(UW *flag)
+ */
+        PUBLIC  _kernel_spin_lock_test
+_kernel_spin_lock_test:
+        push    {r0,lr}
+        bl      get_cid
+        pop     {r2,lr}
+        mrs     r3,  cpsr
+        tst     r3,  #0x0F
+        swieq   #1
+        cpsid   a
+kernel_spin_lock_test_loop:
+        ldrex   r1,  [r2]
+        cmp     r1,  #0
+        bne     kernel_spin_lock_test_end
+        mov     r1,  #1
+        strex   r1,  r0,  [r2]
+        cmp     r1,  #0
+        bne     kernel_spin_lock_test_loop
+kernel_spin_lock_test_end:
+        clrex
+        mov     r0,  r1
+        msr     cpsr_c,   r3
+        bx      lr
+
+/**
+ * Reference spinlock
+ * void _kernel_spin_locked_test(UW *flag)
+ */
+        PUBLIC  _kernel_spin_locked_test
+_kernel_spin_locked_test:
+        ldr     r0,  [r0]
+        bx      lr
+
+        END

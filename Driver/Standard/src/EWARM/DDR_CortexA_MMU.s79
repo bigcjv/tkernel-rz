@@ -1,0 +1,515 @@
+/**
+ * @file    DDR_CortexA_MMU.s79
+ * @brief   Micro C Cube Standard, MMU and Cache management (Cortex-A, EWARM)
+ * @date    2017.11.09
+ * @author  Copyright (c) 2016-2017, eForce Co., Ltd. All rights reserved.
+ *
+ ******************************************************************************
+ * @par     History
+ *          - rev 1.0 (2016.05.31) y-kim
+ *            Initial version.
+ *          - rev 1.1 (2017.03.13) yokota
+ *            fix cache invalid and clean bug(refs #815).
+ *          - rev 1.2 (2017.11.09) i-cho
+ *            Clear TTBCR.EAE bit.
+ *            Corrected SINGLE_CORE conditional directive.
+ ******************************************************************************
+ */
+#include <cpu_cfg.h>
+
+        SECTION .text:CODE:NOROOT(2)
+        CODE32
+
+#if (USE_CPU == CPU_CORTEX_A5)
+        #define ICACHE_LINE_LEN     32
+        #define DCACHE_LINE_LEN     32
+
+#elif (USE_CPU == CPU_CORTEX_A7)
+        #define ICACHE_LINE_LEN     32
+        #define DCACHE_LINE_LEN     64
+
+#elif (USE_CPU == CPU_CORTEX_A8)
+        #define ICACHE_LINE_LEN     64
+        #define DCACHE_LINE_LEN     64
+
+#elif (USE_CPU == CPU_CORTEX_A9)
+        #define ICACHE_LINE_LEN     32
+        #define DCACHE_LINE_LEN     32
+
+#elif (USE_CPU == CPU_CORTEX_A15)
+        #define ICACHE_LINE_LEN     64
+        #define DCACHE_LINE_LEN     64
+
+#else
+#error "Unsupported CPU."
+#endif
+
+        #define ICACHE_LINE_LEN_ALIGN     (ICACHE_LINE_LEN - 1)
+        #define DCACHE_LINE_LEN_ALIGN     (DCACHE_LINE_LEN - 1)
+
+
+/*
+ * Initialize Cortex-A MMU
+ * void _ddr_cortexa_mmu_init(UW ttb_addr, const void * cfgtbl_addr);
+ * @param ttb_addr  hardware page table address
+ * @param cfg_addr  configuration table address
+ */
+        PUBLIC  _ddr_cortexa_mmu_init
+
+_ddr_cortexa_mmu_init:
+;
+        mov     r10, r1
+        mov     r12, r0
+        add     r11, r0,  #0x4000
+        mov     r1,  #0x1000
+        mov     r2,  #0
+mmu_init_1:
+        str     r2,  [r0], #4
+        subs    r1,  r1,  #1
+        bne     mmu_init_1
+
+; r12 ... 1'st descriptor base address
+; r11 ... 2'nd descriptor base address
+; r10 ... configuration table
+
+mmu_init_2:
+        ldmia   r10!,{r6-r9}
+
+; r6 ...... size
+; r7 ...... physical address
+; r8 ...... virtual address
+; r9 ...... access permission
+; [r10] ... region attribute
+
+        teq     r6,  #0
+        beq     mmu_init_e
+mmu_init_3:
+
+; r5 ... 1'st descriptor index
+        mov     r5,  r8,  LSR #20
+        cmp     r6,  #0x00100000
+        mov     r3,  #-1
+        ldr     r0,  [r12,r5,LSL #2]
+        orr     r4,  r8,  r7
+        and     r0,  r0,  #0x03
+        blo     mmu_init_4
+        tst     r4,  r3,  LSR #12
+        bne     mmu_init_4
+        teq     r0,  #0x00
+        beq     mmu_init_sec
+        teq     r0,  #0x02
+        beq     mmu_init_sec
+mmu_init_4:
+        teq     r0,  #0x00
+        beq     mmu_init_5
+        teq     r0,  #0x01
+        beq     mmu_init_6
+
+; change from section to coarse
+        ldr     r0,  [r12,r5,LSL #2]
+        mov     r2,  r11
+        orr     r1,  r11, #0x01
+        add     r11, r11, #0x400
+        str     r1,  [r12,r5,LSL #2]
+
+        and     r1,  r0,  #0x00038C00
+        bic     r0,  r0,  #0x00038C00
+        tst     r0,  #0x0010
+        bic     r0,  r0,  #0x03F0
+        mov     r1,  r1,  LSR #6
+        orr     r0,  r0,  r1
+        orrne   r0,  r0,  #8000
+        bic     r0,  r0,  #0x0003
+        orr     r0,  r0,  #0x01
+mmu_init_c1:
+        str     r0,  [r2], #4
+        tst     r2,  #0x3F
+        addeq   r0,  r0,  #0x00010000
+        teq     r2,  r11
+        bne     mmu_init_c1
+        b       mmu_init_6
+
+; create coarse table
+mmu_init_5:
+        mov     r2,  r11
+        orr     r1,  r11, #0x01
+        add     r11, r11, #0x400
+        str     r1,  [r12,r5,LSL #2]
+mmu_init_c2:
+        teq     r2,  r11
+        strne   r0,  [r2], #4
+        bne     mmu_init_c2
+
+mmu_init_6:
+        ldr     r0,  [r12,r5,LSL #2]
+        cmp     r6,  #0x00010000
+        mov     r2,  r4
+        and     r4,  r0,  r3,  LSL #10      ; r4 ... coarse descriptor base address
+        blt     mmu_init_4k
+        tst     r2,  r3,  LSR #16
+        bne     mmu_init_4k
+
+        mov     r1,  r8,  LSR #12
+        and     r1,  r1,  #0xF0             ; r1 ... coarse 64K page index
+        ldr     r0,  [r4,r1,LSL #2]
+        and     r0,  r0,  #0x03
+        teq     r0,  #0x01
+        beq     mmu_init_c4
+mmu_init_c3:
+        ldr     r0,  [r4,r1,LSL #2]
+        ands    r0,  r0,  #0x03
+        bne     mmu_init_4k
+        add     r1,  r1,  #1
+        tst     r1,  #0x0F
+        bne     mmu_init_c3
+
+; create 64K page
+mmu_init_c4:
+        and     r2,  r9,  #0x0230
+        orr     r1,  r2,  r7
+        ldr     r2,  [r10]
+        bic     r2,  r2,  #0x30000
+        bic     r2,  r2,  #0x00100
+        bic     r2,  r2,  #0x000D1
+        orr     r0,  r1,  r2
+        mov     r1,  r8,  LSR #12
+        orr     r0,  r0,  #0x01
+        and     r1,  r1,  #0xF0
+mmu_init_c5:
+        str     r0,  [r4,r1,LSL #2]
+        add     r1,  r1,  #1
+        tst     r1,  #0x0F
+        bne     mmu_init_c5
+        add     r8,  r8,  #0x10000
+        add     r7,  r7,  #0x10000
+        subs    r6,  r6,  #0x10000
+        bne     mmu_init_3
+        add     r10, r10, #4*1
+        b       mmu_init_2
+
+; create 4K page
+mmu_init_4k:
+        mov     r1,  r8,  LSR #12
+        and     r1,  r1,  #0xF0             ; r1 ... coarse 64K page index
+        ldr     r0,  [r4,r1,LSL #2]
+        and     r2,  r0,  #0x03
+        teq     r2,  #0x01
+        bne     mmu_init_c7
+
+        and     r1,  r0,  #0x7000
+        mov     r1,  r1,  LSR #6
+        tst     r0,  #0x8000
+        bic     r0,  r0,  #0xF000
+        bic     r0,  r0,  #0x0003
+        orr     r0,  r0,  #0x02
+        orrne   r0,  r0,  #0x01
+
+        mov     r1,  r8,  LSR #12
+        and     r1,  r1,  #0xFF             ; r1 ... coarse 4K page index
+mmu_init_c6:
+        str     r0,  [r4,r1,LSL #2]
+        add     r1,  r1,  #1
+        add     r0,  r0,  #0x1000
+        tst     r1,  #0x0F
+        bne     mmu_init_c6
+mmu_init_c7:
+        and     r2,  r9,  #0x0230
+        orr     r1,  r2,  r7
+        ldr     r2,  [r10]
+        bic     r2,  r2,  #0x3F000
+        bic     r2,  r2,  #0x00010
+        orr     r0,  r1,  r2
+        mov     r1,  r8,  LSR #12
+        orr     r0,  r0,  #0x02
+        and     r1,  r1,  #0xFF
+        str     r0,  [r4,r1,LSL #2]
+        add     r8,  r8,  #0x1000
+        add     r7,  r7,  #0x1000
+        subs    r6,  r6,  #0x1000
+        bne     mmu_init_3
+        add     r10, r10, #4*1
+        b       mmu_init_2
+
+; create section page
+mmu_init_sec:
+        and     r0,  r9,  #0x8C00
+        ldr     r1,  [r10]
+        orr     r0,  r0,  r7
+        bic     r1,  r1,  #0x8D00
+        bic     r1,  r1,  #0x00C1
+        orr     r0,  r0,  r1
+        orr     r0,  r0,  #0x02
+        str     r0,  [r12,r5,LSL #2]
+        add     r8,  r8,  #0x100000
+        add     r7,  r7,  #0x100000
+        subs    r6,  r6,  #0x100000
+        bne     mmu_init_3
+        add     r10, r10, #4*1
+        b       mmu_init_2
+
+mmu_init_e:
+        dsb
+        mrc     p15,  0,  r0,  c2,  c0,  2
+        bic     r0,  r0,  #0x07                 ; TTBCR.N = 0
+        bic     r0,  r0,  #0x80000000           ; TTBCR.EAE = 0
+        mcr     p15,  0,  r0,  c2,  c0,  2      ; Set TTBCR
+
+#if (USE_CPU == CPU_CORTEX_A5)
+        orr     r12, r12, #0x48                 ; Inner WBW cacheble, Outer WBW cacheable
+#else /* #if (USE_CPU == CPU_CORTEX_A5) */
+
+    #if (MPCORE == 0U)
+        orr     r12, r12, #0x19                 ; Inner cacheable, Outer WBNW
+    #else   /* #if (MPCORE == 0U) */
+        orr     r12, r12, #0x59                 ; Inner WBNW cacheble, Outer WBNW cacheable
+    #endif  /* #if (MPCORE == 0U) */
+
+#endif /* #if (USE_CPU == CPU_CORTEX_A5) */
+
+        mcr     p15,  0, r12,  c2,  c0,  0      ; Set TTB0 base address register
+        mcr     p15,  0, r12,  c2,  c0,  1      ; Set TTB1 base address register
+
+        ldr     r2,  =0x55555555
+        mcr     p15,  0,  r2,  c3,  c0,  0      ; Set Domain access control
+
+#if (USE_CPU == CPU_CORTEX_A8)
+        mrc     p15,  0,  r0,  c1,  c0,  1
+        orr     r0,  r0,  #0x2
+        mcr     p15,  0,  r0,  c1,  c0,  1      ; L2 Cache enable (only Cortex-A8)
+#endif /* #if (USE_CPU == CPU_CORTEX_A8) */
+
+        mov     r0,  #0x0
+#if (USE_CPU == CPU_CORTEX_A8)
+        mcr     p15,  0,  r0, c13,  c0,  0      ; Process ID = 0
+#else /* #if (USE_CPU == CPU_CORTEX_A8) */
+        mcr     p15,  0,  r0, c13,  c0,  1      ; Context ID = 0
+#endif /* #if (USE_CPU == CPU_CORTEX_A8) */
+        isb
+        dsb
+
+        ; Enable MMU
+        mrc     p15,  0,  r0,  c1,  c0,  0
+        orr     r0,  r0, #0x00001000          ; Set I-Cache Control
+        orr     r0,  r0, #0x00000800          ; Set Branch prediction Control
+        orr     r0,  r0, #0x00000004          ; Set D-Cache Control
+        orr     r0,  r0, #0x00000001          ; Set MMU Control
+        mcr     p15,  0,  r0,  c1,  c0,  0
+        isb
+        bx      lr
+
+
+/**
+ * Clean data cache
+ * void _kernel_clean_data_cache(void * ptr, SIZE sz);
+ * @param ptr  start address
+ * @param sz   size
+ */
+        PUBLIC  _kernel_clean_data_cache
+
+_kernel_clean_data_cache:
+        teq     r1,  #0
+        moveq   r1,  #DCACHE_LINE_LEN
+
+        add     r1,  r1,  r0
+        bic     r0,  r0,  #DCACHE_LINE_LEN_ALIGN
+        add     r1,  r1,  #DCACHE_LINE_LEN_ALIGN
+        bic     r1,  r1,  #DCACHE_LINE_LEN_ALIGN
+clean_data_cache_1:
+        mcr     p15,  0,  r0,  c7, c10,  1
+        add     r0,  r0,  #DCACHE_LINE_LEN
+        cmp     r0,  r1
+        blo     clean_data_cache_1
+        dsb
+        bx      lr
+
+/**
+ * Flush data cache
+ * void _kernel_flush_data_cache(void * ptr, SIZE sz);
+ * @param ptr  start address
+ * @param sz   size
+ */
+        PUBLIC  _kernel_flush_data_cache
+
+_kernel_flush_data_cache:
+        teq     r1,  #0
+        moveq   r1,  #DCACHE_LINE_LEN
+
+        add     r1,  r1,  r0
+        bic     r0,  r0,  #DCACHE_LINE_LEN_ALIGN
+        add     r1,  r1,  #DCACHE_LINE_LEN_ALIGN
+        bic     r1,  r1,  #DCACHE_LINE_LEN_ALIGN
+flush_data_cache:
+        mcr     p15,  0,  r0,  c7, c14,  1
+        add     r0,  r0,  #DCACHE_LINE_LEN
+        cmp     r0,  r1
+        blo     flush_data_cache
+        dsb
+        bx      lr
+
+
+/**
+ * Invalidate data cache
+ * void _kernel_invalid_data_cache(void * ptr, SIZE sz);
+ * @param ptr  start address
+ * @param sz   size
+ */
+        PUBLIC  _kernel_invalid_data_cache
+
+_kernel_invalid_data_cache:
+        teq     r1,  #0
+        moveq   r1,  #DCACHE_LINE_LEN
+
+        add     r1,  r1,  r0
+        bic     r0,  r0,  #DCACHE_LINE_LEN_ALIGN
+        add     r1,  r1,  #DCACHE_LINE_LEN_ALIGN
+        bic     r1,  r1,  #DCACHE_LINE_LEN_ALIGN
+invalid_data_cache:
+        mcr     p15,  0,  r0,  c7,  c6,  1
+        add     r0,  r0,  #DCACHE_LINE_LEN
+        cmp     r0,  r1
+        blo     invalid_data_cache
+        dsb
+        bx      lr
+
+
+/**
+ * Invalidate instruction cache
+ * void _kernel_invalid_inst_cache(void * ptr, SIZE sz);
+ * @param ptr  start address
+ * @param sz   size
+ */
+        PUBLIC  _kernel_invalid_inst_cache
+
+_kernel_invalid_inst_cache:
+        teq     r1,  #0
+        mcreq   p15,  0,  r1,  c7,  c5,  0  ; Invalidate L1 instruction cache
+        beq     return_invalid_inst_cache
+
+        add     r1,  r1,  r0
+        bic     r0,  r0,  #ICACHE_LINE_LEN_ALIGN
+        add     r1,  r1,  #ICACHE_LINE_LEN_ALIGN
+        bic     r1,  r1,  #ICACHE_LINE_LEN_ALIGN
+invalid_inst_cache:
+        mcr     p15,  0,  r0,  c7,  c5,  1
+        add     r0,  r0,  #ICACHE_LINE_LEN
+        cmp     r0,  r1
+        blo     invalid_inst_cache
+
+return_invalid_inst_cache:
+        mov     r0,  #0
+        mcr     p15,  0,  r0,  c7,  c5,  6  ; Invalidate all branch predictors
+        dsb
+        isb
+        bx      lr
+
+
+/*
+ * Data synchronization barrier
+ * void _kernel_synch_cache(void);
+ */
+        PUBLIC  _kernel_synch_cache
+
+_kernel_synch_cache:
+        dsb
+        bx      lr
+
+/*
+ * Data memory barrier
+ * void _kernel_memory_barrier(void);
+ */
+        PUBLIC  _kernel_memory_barrier
+
+_kernel_memory_barrier:
+        dmb
+        bx      lr
+
+
+/*
+ * Invalidate data and instruction TLB's
+ * void _kernel_invalid_tlb(void);
+ */
+        PUBLIC _kernel_invalid_tlb
+
+_kernel_invalid_tlb:
+        mov     r0,  #0
+        mcr     p15,  0,  r0,  c8,  c7,   0
+        dsb
+        isb
+        bx      lr
+
+
+/*
+ * Wait for interrupt
+ * void _kernel_wait_for_interrupt(void);
+ */
+        PUBLIC  _kernel_wait_for_interrupt
+
+_kernel_wait_for_interrupt:
+        mov     r0,  #0
+        mcr     p15,  0,  r0,  c7, c0,   4
+        bx      lr
+
+
+/*
+ * Invalidate all caches (instruction/data)
+ * void _kernel_invalid_cache(void);
+ */
+        PUBLIC _kernel_invalid_cache
+
+_kernel_invalid_cache:
+
+        ; Invalidate L1 instruction cache
+        mrc     p15,  1,  r0,  c0,  c0,  1
+        tst     r0,  #0x3
+        mov     r0,  #0
+        mcrne   p15,  0,  r0,  c7,  c5,  0
+
+        ; Invalidate all branch predictors
+        mcr     p15,  0,  r0,  c7,  c5,  6
+
+        ; Invalidate data/unified caches
+        mrc     p15,  1,  r0,  c0,  c0,  1
+        ands    r3,  r0,  #0x7000000
+        mov     r3,  r3,  LSR #23
+        beq     finished
+
+        mov     r10, #0
+loop_Lx:
+        add     r2,  r10, r10, LSR #1
+        mov     r1,  r0,  LSR r2
+        and     r1,  r1,  #7
+        cmp     r1,  #2
+        blt     skip
+
+        mcr     p15,  2, r10,  c0,  c0,  0
+        isb
+        mrc     p15,  1,  r1,  c0,  c0,  0
+        and     r2,  r1,  #0x7
+        add     r2,  r2,  #4
+        movw    r4,  #0x3FF
+        ands    r4,  r4,  r1,  LSR #3
+        clz     r5,  r4
+        movw    r7,  #0x00007FFF
+        ands    r7,  r7,  r1,  LSR #13
+
+loop_way:
+        mov     r9, r4
+
+loop_set:
+        orr     r11, r10, r9,  LSL r5
+        orr     r11, r11, r7,  LSL r2
+        mcr     p15,  0, r11,  c7,  c6,  2
+        subs    r9,  r9,  #1
+        bge     loop_set
+        subs    r7,  r7,  #1
+        bge     loop_way
+skip:
+        add     r10, r10, #2
+        cmp     r3, r10
+        bgt     loop_Lx
+
+finished:
+        dsb
+        bx      lr
+
+        END

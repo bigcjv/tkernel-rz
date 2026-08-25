@@ -1,0 +1,29 @@
+
+void Init_Register()
+{
+    RegisterChange("R0", 3, 0x00000000);
+    RegisterChange("R1", 3, 0x00000000);
+    RegisterChange("R2", 3, 0x00000000);
+    RegisterChange("R3", 3, 0x00000000);
+    RegisterChange("R4", 3, 0x00000000);
+    RegisterChange("R5", 3, 0x00000000);
+    RegisterChange("R6", 3, 0x00000000);
+    RegisterChange("R7", 3, 0x00000000);
+    RegisterChange("R8", 3, 0x00000000);
+    RegisterChange("R9", 3, 0x00000000);
+    RegisterChange("R10", 3, 0x00000000);
+    RegisterChange("R11", 3, 0x00000000);
+    RegisterChange("R12", 3, 0x00000000);
+    RegisterChange("R13", 3, 0x00000000);
+    RegisterChange("R14", 3, 0x00000000);
+    RegisterChange("R15", 3, 0x00000000);
+    RegisterChange("CPSR", 3, 0x000001D3);
+}
+
+int Init()
+{
+    Init_Register();
+}
+
+$$Init();
+

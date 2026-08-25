@@ -1,0 +1,11 @@
+/build/*
+!/build/EWARM/
+
+/build/EWARM/*
+!/build/EWARM/*.ewp
+!/build/EWARM/*.eww
+!/build/EWARM/*.ewd
+!/build/EWARM/*.ewt
+!/build/EWARM/*.icf
+
+/build/EWARM/Backup*
