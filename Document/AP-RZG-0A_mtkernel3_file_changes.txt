@@ -1,0 +1,75 @@
+AP-RZG-0A RZ/G1E CPU0 micro T-Kernel 3 移植文件清单
+比较基准: 234308d feat:move tkernel source file and unchanged
+
+统计
+  修改: 6
+  新增: 32（包含本清单和移植说明）
+  删除: 0
+  合计: 38
+
+【修改】
+M Kernel/mtkernel/config/config.h
+  配置 1 ms tick、128 KiB 静态系统内存并关闭首次移植的 FPU context。
+M Kernel/mtkernel/include/sys/machine.h
+  增加 AP-RZG-0A/RZ-G1E 目标选择和 IAR 编译器适配宏。
+M Sample/Standard/RZG1E/AP-RZG-0A.UART/build/EWARM/sample.icf
+  删除 uC3 链接区域，增加 micro T-Kernel code/data/stack/non-cache/TLB 布局。
+M Sample/Standard/RZG1E/AP-RZG-0A.UART/build/EWARM/sample_uart.ewp
+  切换到 micro T-Kernel 源码、新 RZ/G1E 目标和 IAR 汇编；移除 uC3 库/启动/GIC/GTIMER。
+M Sample/Standard/RZG1E/AP-RZG-0A.UART/src/mmutbl_cfg.c
+  把 uC3 类型头文件替换为 T-Kernel 头文件，MMU 表内容保持不变。
+M Sample/Standard/RZG1E/AP-RZG-0A.UART/src/sample.c
+  替换为 task/delay/semaphore/cyclic/tick/LED 综合自测试。
+
+【新增：目标公共头文件】
+A Kernel/mtkernel/include/sys/sysdepend/ap_rzg0a_rzg1e/machine.h
+A Kernel/mtkernel/include/sys/sysdepend/ap_rzg0a_rzg1e/profile.h
+A Kernel/mtkernel/include/sys/sysdepend/ap_rzg0a_rzg1e/sysdef.h
+A Kernel/mtkernel/include/sys/sysdepend/cpu/rzg1e/machine.h
+A Kernel/mtkernel/include/sys/sysdepend/cpu/rzg1e/profile.h
+A Kernel/mtkernel/include/sys/sysdepend/cpu/rzg1e/sysdef.h
+A Kernel/mtkernel/include/tk/sysdepend/ap_rzg0a_rzg1e/cpudef.h
+A Kernel/mtkernel/include/tk/sysdepend/ap_rzg0a_rzg1e/syslib.h
+A Kernel/mtkernel/include/tk/sysdepend/cpu/rzg1e/cpudef.h
+A Kernel/mtkernel/include/tk/sysdepend/cpu/rzg1e/syslib.h
+
+【新增：板级内核支持】
+A Kernel/mtkernel/kernel/sysdepend/ap_rzg0a_rzg1e/cpu_clock.c
+A Kernel/mtkernel/kernel/sysdepend/ap_rzg0a_rzg1e/cpu_status.h
+A Kernel/mtkernel/kernel/sysdepend/ap_rzg0a_rzg1e/cpu_task.h
+A Kernel/mtkernel/kernel/sysdepend/ap_rzg0a_rzg1e/devinit.c
+A Kernel/mtkernel/kernel/sysdepend/ap_rzg0a_rzg1e/hw_setting.c
+A Kernel/mtkernel/kernel/sysdepend/ap_rzg0a_rzg1e/power_save.c
+A Kernel/mtkernel/kernel/sysdepend/ap_rzg0a_rzg1e/sys_start.c
+A Kernel/mtkernel/kernel/sysdepend/ap_rzg0a_rzg1e/sys_timer.h
+A Kernel/mtkernel/kernel/sysdepend/ap_rzg0a_rzg1e/sysdepend.h
+
+【新增：CPU、异常和调度支持】
+A Kernel/mtkernel/kernel/sysdepend/cpu/rzg1e/EWARM/mtk_context.s79
+A Kernel/mtkernel/kernel/sysdepend/cpu/rzg1e/EWARM/mtk_startup.s79
+A Kernel/mtkernel/kernel/sysdepend/cpu/rzg1e/cpu_status.h
+A Kernel/mtkernel/kernel/sysdepend/cpu/rzg1e/cpu_task.h
+A Kernel/mtkernel/kernel/sysdepend/cpu/rzg1e/interrupt.c
+A Kernel/mtkernel/kernel/sysdepend/cpu/rzg1e/sys_timer.h
+A Kernel/mtkernel/kernel/sysdepend/cpu/rzg1e/sysdepend.h
+
+【新增：库支持】
+A Kernel/mtkernel/lib/libtk/sysdepend/cpu/rzg1e/int_rzg1e.c
+A Kernel/mtkernel/lib/libtk/sysdepend/cpu/rzg1e/wusec_rzg1e.c
+A Kernel/mtkernel/lib/libtm/sysdepend/ap_rzg0a_rzg1e/tm_com.c
+
+【新增：测试和文档】
+A Sample/Standard/RZG1E/AP-RZG-0A.UART/src/sample_uc3.c
+  原 uC3 sample.c 的保留副本，不加入当前 micro T-Kernel 构建。
+A Document/AP-RZG-0A_mtkernel3_CPU0_porting.md
+  移植设计、流程、文件、编译下载、测试与限制说明。
+A Document/AP-RZG-0A_mtkernel3_file_changes.txt
+  本文件，列出相对基准提交的全部修改、新增和删除项。
+
+【删除】
+无。
+
+说明
+  Driver/Standard/src/EWARM/DDR_CortexA_MMU.s79 和原 mmutbl_cfg.c 的映射表继续复用，未直接修改。
+  Kernel/mtkernel 的 RZA2M 目标源文件均未修改。
+  uC3 相关源码保留在仓库中，仅从当前 AP-RZG-0A.UART 的 IAR 构建项中移除。
