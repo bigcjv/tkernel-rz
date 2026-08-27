@@ -19,7 +19,7 @@ M Sample/Standard/RZG1E/AP-RZG-0A.UART/build/EWARM/sample_uart.ewp
 M Sample/Standard/RZG1E/AP-RZG-0A.UART/src/mmutbl_cfg.c
   把 uC3 类型头文件替换为 T-Kernel 头文件，MMU 表内容保持不变。
 M Sample/Standard/RZG1E/AP-RZG-0A.UART/src/sample.c
-  替换为 task/delay/semaphore/cyclic/tick/LED 综合自测试。
+  替换为 task/delay/semaphore/cyclic/tick/LED 综合自测试；增加对象创建和任务启动阶段输出。
 
 【新增：目标公共头文件】
 A Kernel/mtkernel/include/sys/sysdepend/ap_rzg0a_rzg1e/machine.h
@@ -46,10 +46,12 @@ A Kernel/mtkernel/kernel/sysdepend/ap_rzg0a_rzg1e/sysdepend.h
 
 【新增：CPU、异常和调度支持】
 A Kernel/mtkernel/kernel/sysdepend/cpu/rzg1e/EWARM/mtk_context.s79
+  UND 入口在调用 C 之前保存 SPSR、LR、真实 fault PC 和 opcode，避免异常现场被打印函数覆盖。
 A Kernel/mtkernel/kernel/sysdepend/cpu/rzg1e/EWARM/mtk_startup.s79
 A Kernel/mtkernel/kernel/sysdepend/cpu/rzg1e/cpu_status.h
 A Kernel/mtkernel/kernel/sysdepend/cpu/rzg1e/cpu_task.h
 A Kernel/mtkernel/kernel/sysdepend/cpu/rzg1e/interrupt.c
+  增加 RZ/G1E Undefined 终止处理，输出异常现场和内核调度状态。
 A Kernel/mtkernel/kernel/sysdepend/cpu/rzg1e/sys_timer.h
 A Kernel/mtkernel/kernel/sysdepend/cpu/rzg1e/sysdepend.h
 

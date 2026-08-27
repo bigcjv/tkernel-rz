@@ -3,6 +3,7 @@
 #ifdef CPU_RZG1E
 
 #include <kernel.h>
+#include <tm/tmonitor.h>
 #include "../../sysdepend.h"
 
 Noinit(EXPORT FP knl_intvec_tbl[N_INTVEC]);
@@ -16,6 +17,28 @@ EXPORT const FP knl_svcvec_tbl[N_SVCHDR] = {
 	NULL,
 	NULL
 };
+
+/*
+ * Undefined-instruction terminal handler.
+ *
+ * The assembly entry passes the exception state as arguments because LR_und
+ * is overwritten as soon as this C function calls tm_printf().  Keeping the
+ * capture in assembly makes the printed PC suitable for direct map/listing
+ * lookup on the next board run.
+ */
+EXPORT void rzg1e_undefined_handler(UW spsr, UW return_lr,
+	UW fault_pc, UW opcode)
+{
+	tm_printf((const UB *)"\n[MTK][FAULT] Undefined instruction\n");
+	tm_printf((const UB *)"[MTK][FAULT] pc=%08lx lr=%08lx spsr=%08lx opcode=%08lx\n",
+		fault_pc, return_lr, spsr, opcode);
+	tm_printf((const UB *)"[MTK][FAULT] taskindp=%ld ctxtsk=%08lx schedtsk=%08lx\n",
+		knl_taskindp, (UW)knl_ctxtsk, (UW)knl_schedtsk);
+
+	for (;;) {
+		;
+	}
+}
 
 EXPORT ER knl_define_inthdr(INT intno, ATR intatr, FP inthdr)
 {

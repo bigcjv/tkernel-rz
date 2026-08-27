@@ -942,7 +942,7 @@ knl_timer_handler
 | `Sample/Standard/RZG1E/AP-RZG-0A.UART/build/EWARM/sample.icf` | 删除 uC3 SYS/STK/MPL/VINFTBL/VECTTBL 布局，改成 MTK code/data/stack/non-cache/TLB |
 | `Sample/Standard/RZG1E/AP-RZG-0A.UART/build/EWARM/sample_uart.ewp` | 移除 uC3 库/源文件，加入 micro T-Kernel、RZG1E target 和新 IAR 汇编；关 FPU/NEON |
 | `Sample/Standard/RZG1E/AP-RZG-0A.UART/src/mmutbl_cfg.c` | include 从 uC3 `kernel.h` 改为 `<tk/tkernel.h>`，MMU 表内容不变 |
-| `Sample/Standard/RZG1E/AP-RZG-0A.UART/src/sample.c` | uC3 串口/mail demo 改为 micro T-Kernel task/semaphore/cyclic/tick/LED 测试 |
+| `Sample/Standard/RZG1E/AP-RZG-0A.UART/src/sample.c` | uC3 串口/mail demo 改为 micro T-Kernel task/semaphore/cyclic/tick/LED 测试；增加一次性启动阶段标记 |
 
 ### 10.2 新增的 10 个公开 target 头文件
 
@@ -978,10 +978,10 @@ knl_timer_handler
 | 文件 | 内容 |
 |---|---|
 | `Kernel/mtkernel/kernel/sysdepend/cpu/rzg1e/EWARM/mtk_startup.s79` | vector、CPU0 reset、CPU1 park、MMU/Cache、模式栈、IAR Runtime |
-| `Kernel/mtkernel/kernel/sysdepend/cpu/rzg1e/EWARM/mtk_context.s79` | IRQ/SVC/FIQ/abort、HLL handler、dispatcher、IRQ mask、CP15 Timer |
+| `Kernel/mtkernel/kernel/sysdepend/cpu/rzg1e/EWARM/mtk_context.s79` | IRQ/SVC/FIQ/abort、HLL handler、dispatcher、IRQ mask、CP15 Timer；UND 入口在调用 C 前捕获真实异常现场 |
 | `Kernel/mtkernel/kernel/sysdepend/cpu/rzg1e/cpu_status.h` | critical section、context 判断、SVC dispatch |
 | `Kernel/mtkernel/kernel/sysdepend/cpu/rzg1e/cpu_task.h` | 转发 ARMv7-A task frame |
-| `Kernel/mtkernel/kernel/sysdepend/cpu/rzg1e/interrupt.c` | GIC init、kernel vector table、PPI 29 handler |
+| `Kernel/mtkernel/kernel/sysdepend/cpu/rzg1e/interrupt.c` | GIC init、kernel vector table、PPI 29 handler，以及 RZ/G1E Undefined 现场输出 |
 | `Kernel/mtkernel/kernel/sysdepend/cpu/rzg1e/sys_timer.h` | Generic Timer -> kernel timer hook |
 | `Kernel/mtkernel/kernel/sysdepend/cpu/rzg1e/sysdepend.h` | 转发 ARMv7-A sysdepend |
 
@@ -1040,3 +1040,60 @@ Git 物理删除：无。
 2. 增加 abort 寄存器输出和栈水位监测，便于长期运行诊断。
 3. 在独立阶段加入 FPU/NEON context save/restore 并增加浮点任务压力测试。
 4. CPU1 另建启动映像和共享内存协议；先明确 cache 属性、barrier 和中断路由，再解除 `WFE` 停放。
+
+## 14. 首次实板 Undefined 故障诊断
+
+### 14.1 现象
+
+首次实板下载后已经能完成 Loader、IAR Runtime、micro T-Kernel 初始任务和 SCIF0 输出，串口停在：
+
+```text
+microT-Kernel Version 3.00
+
+[MTK][BOOT] AP-RZG-0A RZ/G1E CPU0
+[MTK][TEST] task+delay+semaphore+cyclic+LED
+Undef
+```
+
+这说明 reset、DDR、MMU、C Runtime、内核初始化和初始任务调度都已经执行，故障发生在 `usermain()` 启动测试对象之后，不能再按“程序没有启动”处理。
+
+### 14.2 为什么调试器里的 `R14_und` 不能直接作为故障地址
+
+原公共 `UndefinedInst_Handler()` 先调用 `tm_printf("Undef")`，再进入死循环。处理器此时仍在 UND 模式，`tm_printf()` 及其底层 `out_w()`、`disint()`、`enaint()` 的每次 `BL` 都会继续改写当前模式的 `LR`，也就是 `R14_und`。
+
+因此，停机后看到的 `R14_und=0x40000A38` 已经是打印调用链中的返回地址。用户提供的内存反汇编也证明该区域属于 `enaint()`：`0x40000A34` 的字节 `D1 00 00 EB` 按 ARM32 是合法 `BL`，不能据此判断它就是原始 Undefined 指令。
+
+真正现场只能在 `undef_entry` 进入后的第一时间保存，必须早于任何 C 函数调用。
+
+### 14.3 本次诊断改动
+
+`mtk_context.s79::undef_entry` 现在执行以下操作：
+
+1. `CPSID IA`，终止性异常发生后禁止 IRQ/异步 abort 嵌套，避免 Generic Timer 继续改变现场。
+2. 切换到独立 `UND_STACK`，保存 `r0-r3/r12/lr`。
+3. 用 `MRS r0, spsr` 捕获异常前 CPSR。
+4. 根据 `SPSR.T` 计算真实故障地址：ARM 状态为 `LR_und-4`，Thumb 状态为 `LR_und-2`。
+5. ARM 状态读取 32 位 opcode，Thumb 状态读取首个 16 位 halfword。
+6. 把 `spsr/lr/fault_pc/opcode` 作为四个参数传给 `rzg1e_undefined_handler()`。
+
+目标 C handler 一次性输出：
+
+```text
+[MTK][FAULT] Undefined instruction
+[MTK][FAULT] pc=........ lr=........ spsr=........ opcode=........
+[MTK][FAULT] taskindp=... ctxtsk=........ schedtsk=........
+```
+
+该 PC 才能用于 IAR Disassembly、`.map` 和 `.lst` 查找。`taskindp` 可区分任务上下文和中断处理上下文；`ctxtsk/schedtsk` 可判断异常前是否正准备任务切换。
+
+`sample.c` 同时增加了五个一次性阶段输出，依次确认 semaphore、cyclic、producer、consumer、LED task 的创建/启动位置，不增加循环打印负担。
+
+### 14.4 下一次板上测试方法
+
+1. IAR 执行 `Project -> Clean`，再执行 `Rebuild All`，避免继续下载旧 uC3 或旧 micro T-Kernel 输出。
+2. 确认新生成的 `.map/.out` 时间与本次构建一致，并确认 `.map` 中存在 `rzg1e_undefined_handler`。
+3. 下载并复位 CPU0，完整保存从 `microT-Kernel Version` 开始的串口输出。
+4. 如果仍异常，记录全部 `[MTK][STEP]` 和三行 `[MTK][FAULT]`；用打印的 `pc` 在当前构建的 IAR Disassembly 或 map/list 文件中定位，而不是再使用停机后的 `R14_und`。
+5. 如果出现周期性 `[MTK][PASS]`，连续运行至少 10 分钟，检查 produced/consumed/cyclic 持续增长、LED 翻转且 `err=0`。
+
+当前工作区留存的 `Debug/Exe/sample_uart.out` 和 `Debug/List/sample_uart.map` 仍是旧 uC3 产物，不包含 `[MTK]` 字符串，也不能用于解释本次板上地址。必须以实际下载映像同一次构建生成的 map/list 为准。

@@ -128,19 +128,24 @@ EXPORT INT usermain(void)
 		tm_printf((const UB *)"[MTK][FAIL] tk_cre_sem=%d\n", test_semid);
 		for (;;) { ; }
 	}
+	tm_printf((const UB *)"[MTK][STEP] semaphore created: id=%d\n", test_semid);
 
 	object_id = tk_cre_cyc(&ccyc);
 	if (object_id < E_OK) {
 		tm_printf((const UB *)"[MTK][FAIL] tk_cre_cyc=%d\n", object_id);
 		for (;;) { ; }
 	}
+	tm_printf((const UB *)"[MTK][STEP] cyclic created: id=%d\n", object_id);
 
 	object_id = create_task((FP)producer_task, 5);
 	if (object_id < E_OK) record_error(object_id);
+	else tm_printf((const UB *)"[MTK][STEP] producer started: id=%d\n", object_id);
 	object_id = create_task((FP)consumer_task, 6);
 	if (object_id < E_OK) record_error(object_id);
+	else tm_printf((const UB *)"[MTK][STEP] consumer started: id=%d\n", object_id);
 	object_id = create_task((FP)led_task, 8);
 	if (object_id < E_OK) record_error(object_id);
+	else tm_printf((const UB *)"[MTK][STEP] LED task started: id=%d\n", object_id);
 
 	for (;;) {
 		UW produced;
